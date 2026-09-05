@@ -491,13 +491,12 @@ static real GetBaseOffsetValue(const GapData& gapdata, int samplerate,
 
 // Compares each offset to its corresponding offbeat value, and selects the most
 // promising one.
-static real AdjustForOffbeats(SerializedTempo* data, real offset, real bpm) {
+// The slopes buffer is computed once by the caller and shared across every BPM
+// candidate; it only depends on the audio, not on the tempo being tested.
+static real AdjustForOffbeats(SerializedTempo* data, const real* slopes,
+                              real offset, real bpm) {
     int samplerate = data->samplerate;
     int numFrames = data->numFrames;
-
-    // Create a slope representation of the waveform.
-    real* slopes = AlignedMalloc<real>(numFrames);
-    ComputeSlopes(data->samples, slopes, numFrames, samplerate);
 
     // Determine the offbeat sample position.
     real secondsPerBeat = 60.0 / bpm;
@@ -513,7 +512,6 @@ static real AdjustForOffbeats(SerializedTempo* data, real offset, real bpm) {
         sumA += slopes[static_cast<int>(posA)];
         sumB += slopes[static_cast<int>(posB)];
     }
-    AlignedFree(slopes);
 
     // Return the offset with the highest support.
     return (sumA >= sumB) ? offset : offbeat;
@@ -535,8 +533,18 @@ static void CalculateOffset(SerializedTempo* data, Onset* onsets,
     for (auto& t : tempo)
         t.offset = GetBaseOffsetValue(gapdata, samplerate, t.bpm);
 
-    // Test all onsets against their offbeat values, pick the best one.
-    for (auto& t : tempo) t.offset = AdjustForOffbeats(data, t.offset, t.bpm);
+    // Test all onsets against their offbeat values, pick the best one. The
+    // slope representation of the waveform is the same for every candidate, so
+    // build it once here rather than once per candidate; it is one double per
+    // frame, which is a few hundred megabytes on a long song.
+    real* slopes = AlignedMalloc<real>(data->numFrames);
+    if (!slopes) return;
+
+    ComputeSlopes(data->samples, slopes, data->numFrames, samplerate);
+    for (auto& t : tempo)
+        t.offset = AdjustForOffbeats(data, slopes, t.offset, t.bpm);
+
+    AlignedFree(slopes);
 }
 
 // ================================================================================================
