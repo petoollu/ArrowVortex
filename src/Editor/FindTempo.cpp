@@ -550,6 +550,12 @@ class TempoDetectorImp : public TempoDetector, public BackgroundThread {
 TempoDetectorImp::TempoDetectorImp(int firstFrame, int numFrames) {
     auto& music = gMusic->getSamples();
 
+    // Safe to take before start(): BackgroundThread owns a stop_source that is
+    // live from construction. It used to come from the jthread, which has no
+    // stop state until start() assigns one, so this token was permanently dead
+    // and the MarkProgress cancellation check below could never fire. Closing
+    // the dialog or restarting detection then blocked the UI thread in join()
+    // until the whole analysis ran to completion.
     data_.terminate = getStopToken();
     data_.progress = 0;
 
