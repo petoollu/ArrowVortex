@@ -15,6 +15,7 @@
 #include <Simfile/Segments.h>
 #include <Simfile/Tempo.h>
 #include <System/System.h>
+#include <algorithm>
 #include <string>
 
 namespace Vortex {
@@ -101,7 +102,9 @@ void DialogAdjustSync::myCreateWidgets() {
     myBPMLabel = myLayout.add<WgLabel>();
     myBPMList = myLayout.addH<WgSelectList>(gSystem->applyScaleFactor(62));
     myBPMList->value.bind(&mySelectedResult);
-    myBPMList->setTooltip("BPM estimates calculated by the editor");
+    myBPMList->setTooltip(
+        "BPM estimates calculated by the editor, each shown with its support "
+        "relative to the best match");
 
     myLayout.row().col(118).col(118);
     myApplyBPM = myLayout.add<WgButton>();
@@ -143,12 +146,24 @@ void DialogAdjustSync::onTick() {
         // Check if the BPM detector has finished.
         if (myTempoDetector->hasResult()) {
             myDetectionResults = myTempoDetector->getResult();
-            double scalar = 0.0;
+
+            // Fitness values are relative scores with a fitted baseline curve
+            // subtracted, so their absolute size means nothing on its own and
+            // they can even come out negative. Scale them against the best
+            // candidate rather than against the sum of all candidates: the sum
+            // made a perfectly good detection read as "53%" purely because two
+            // other candidates happened to survive, which looks like low
+            // confidence when it is really just three-way arithmetic. Relative
+            // to the best, the top pick always reads 100% and the rest answer
+            // the question the user actually has, namely how much weaker the
+            // alternatives are.
+            double best = 0.0;
             for (auto& t : myDetectionResults) {
-                scalar += t.fitness;
+                best = std::max(best, t.fitness);
             }
             for (auto& t : myDetectionResults) {
-                t.fitness /= scalar;
+                t.fitness =
+                    (best > 0.0) ? std::max(0.0, t.fitness / best) : 0.0;
                 t.offset = -t.offset;
             }
             for (int i = 0; i < myDetectionResults.size(); ++i) {
