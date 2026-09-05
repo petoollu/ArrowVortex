@@ -112,7 +112,12 @@ GapData::GapData(int bufferSize, int downsample, int numOnsets,
       bufferSize(bufferSize) {
     window = AlignedMalloc<real>(windowSize);
     wrappedPos = AlignedMalloc<int>(numOnsets);
-    wrappedOnsets = AlignedMalloc<real>(bufferSize);
+    // One slot of slack: callers fill this histogram at
+    // (int)fmod(onsetPos, intervalf), and intervalf is a double that can be a
+    // fraction above the integer bufferSize the caller sized us from. At the
+    // very bottom of the BPM range (a candidate rounded down to exactly 89 BPM)
+    // that index reaches bufferSize itself, one past the end.
+    wrappedOnsets = AlignedMalloc<real>(bufferSize + 1);
     CreateHammingWindow(window, windowSize);
 }
 
