@@ -132,7 +132,13 @@ static real GapConfidence(const GapData& gapdata, int gapPos, int interval) {
     const real* wrappedOnsets = gapdata.wrappedOnsets;
     real area = 0.0;
 
-    int beginOnset = gapPos - halfWindowSize;
+    // Interval position that window index 0 corresponds to. It stays fixed even
+    // when the loop bounds below get clamped, which is what keeps the window
+    // aligned with the gap position. Callers guarantee interval > windowSize,
+    // so at most one of the two wrap-around branches can run.
+    const int windowBegin = gapPos - halfWindowSize;
+
+    int beginOnset = windowBegin;
     int endOnset = gapPos + halfWindowSize;
 
     if (beginOnset < 0) {
@@ -153,7 +159,16 @@ static real GapConfidence(const GapData& gapdata, int gapPos, int interval) {
         endOnset = interval;
     }
     for (int i = beginOnset; i < endOnset; ++i) {
-        int windowIndex = i - beginOnset;
+        // Previously "i - beginOnset". When the window wrapped past position 0
+        // the clamp above had already moved beginOnset to 0, which restarted
+        // the window at its own index 0 instead of continuing from where the
+        // wrapped part left off. That double-counted the low window weights and
+        // never reached the high ones, so a gap position inside the first half
+        // window of the interval scored far below its true support: an onset
+        // sitting exactly on position 0 measured 0.08 instead of the window's
+        // peak weight of 1.0. Those positions could therefore never win, which
+        // put a blind spot in the offset search.
+        int windowIndex = i - windowBegin;
         area += wrappedOnsets[i] * window[windowIndex];
     }
 
