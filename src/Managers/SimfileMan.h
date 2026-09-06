@@ -17,9 +17,11 @@ struct SimfileMan {
     /// Loads a new simfile from file and opens it for editing.
     virtual bool load(fs::path path) = 0;
 
-    /// Saves the simfile that is currently open for editing.
+    /// Saves the simfile that is currently open for editing. When adoptFormat
+    /// is true, the simfile takes over the given format as its own, so later
+    /// saves write it back in that same format.
     virtual bool save(const std::string& dir, const std::string& name,
-                      SimFormat format) = 0;
+                      SimFormat format, bool adoptFormat) = 0;
 
     /// Closes the simfile that is currently open for editing.
     virtual void close() = 0;
