@@ -598,8 +598,10 @@ struct EditorImpl : public Editor, public InputHandler {
         std::string dir = gSimfile->getDir();
         std::string file = gSimfile->getFile();
 
-        // Save As is single file.
-        SimFormat saveFmt = myDefaultSaveFormat[0];
+        // Save As is single file. Start from the format the simfile already
+        // has, so saving an .ssc does not preselect the .sm filter.
+        SimFormat saveFmt = gSimfile->get()->format;
+        if (saveFmt == SIM_NONE) saveFmt = myDefaultSaveFormat[0];
         fs::path save_path = utf8ToPath(dir);
         save_path.append(stringToUtf8(file));
 
@@ -662,25 +664,39 @@ struct EditorImpl : public Editor, public InputHandler {
                     break;
             };
 
-            // Save the simfile.
-            if (!gSimfile->save(dir, file, saveFmt)) {
+            // Save the simfile, and keep using the format that was picked.
+            if (!gSimfile->save(dir, file, saveFmt, true)) {
                 HudError("Could not save %s", file.c_str());
             }
 
             return true;
         }
 
-        // Saving multiple formats.
-        std::vector<SimFormat> save = myDefaultSaveFormat;
+        // Determine which formats to write. A simfile that already has a
+        // format is written back in that format alone, so saving an .ssc does
+        // not drop a stale .sm next to it; the default save format applies to
+        // simfiles that have no format of their own yet, such as the ones
+        // started from an audio file. Listing several default save formats is
+        // an explicit request to keep a file in all of them, so those are all
+        // written, with the format of the simfile itself first.
+        std::vector<SimFormat> save;
         SimFormat fmt = gSimfile->get()->format;
-        if (fmt == SIM_NONE) {
-            fmt = save[0];
+        if (myDefaultSaveFormat.size() > 1) {
+            save = myDefaultSaveFormat;
+            if (fmt == SIM_NONE) fmt = save[0];
+            save.erase(std::remove(save.begin(), save.end(), fmt), save.end());
+            save.insert(save.begin(), fmt);
+        } else if (fmt != SIM_NONE) {
+            save.push_back(fmt);
+        } else {
+            save = myDefaultSaveFormat;
         }
-        save.erase(std::remove(save.begin(), save.end(), fmt), save.end());
-        save.insert(save.begin(), fmt);  // Give priority to the load format.
 
+        // Only adopt the format when a single file is written; adopting it
+        // would cut the remaining formats from every later save.
+        bool adoptFormat = (save.size() == 1);
         for (auto saveFmt : save) {
-            if (!gSimfile->save(dir, file, saveFmt)) {
+            if (!gSimfile->save(dir, file, saveFmt, adoptFormat)) {
                 HudError("Could not save %s", file.c_str());
             }
         }
