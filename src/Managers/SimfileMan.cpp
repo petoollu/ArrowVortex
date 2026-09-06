@@ -217,15 +217,17 @@ struct SimfileManImpl : public SimfileMan {
     }
 
     bool save(const std::string& dir, const std::string& name,
-              SimFormat format) override {
+              SimFormat format, bool adoptFormat) override {
         if (!mySimfile) return false;
 
         // Update the song directory and filename.
         mySimfile->dir = dir;
         mySimfile->file = name;
 
-        // Update song format, if missing.
-        if (mySimfile->format == SIM_NONE) mySimfile->format = format;
+        // Update song format, if requested or missing.
+        if (adoptFormat || mySimfile->format == SIM_NONE) {
+            mySimfile->format = format;
+        }
 
         // Save the simfile.
         bool result = SaveSimfile(*mySimfile, format, myBackupOnSave);
