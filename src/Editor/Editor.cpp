@@ -156,6 +156,9 @@ static int FindSaveFilter(SimFormat format) {
     return -1;
 }
 
+// Bumped when a settings file needs one-time fixing up on load.
+static const int SETTINGS_VERSION = 1;
+
 static std::string getSettingsDir() {
     const char* xdg = std::getenv("XDG_CONFIG_HOME");
     if (xdg && xdg[0] == '/') return std::string(xdg) + "/arrowvortex/";
@@ -366,6 +369,18 @@ struct EditorImpl : public Editor, public InputHandler {
                 }
             }
             if (saveFormats.empty()) saveFormats.push_back(SIM_SSC);
+
+            // Settings written before .ssc became the default carry a lone
+            // "sm" that the user never picked: it was the built-in default,
+            // written back on every exit, with no way to change it from the
+            // editor. Update it once. A list, or anything other than a single
+            // "sm", is a deliberate choice and is left alone.
+            int version = 0;
+            general->get("settingsVersion", &version);
+            if (version < 1 && saveFormats == std::vector<SimFormat>{SIM_SM}) {
+                saveFormats = {SIM_SSC};
+            }
+
             myDefaultSaveFormat = saveFormats;
         }
 
@@ -401,6 +416,8 @@ struct EditorImpl : public Editor, public InputHandler {
     void saveGeneralSettings(XmrNode& settings) {
         XmrNode* general = settings.addChild("general");
 
+        general->addAttrib("settingsVersion",
+                           static_cast<long>(SETTINGS_VERSION));
         general->addAttrib("useMultithreading", myUseMultithreading);
         general->addAttrib("useVerticalSync", myUseVerticalSync);
 
