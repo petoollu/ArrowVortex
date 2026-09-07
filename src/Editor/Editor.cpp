@@ -127,6 +127,7 @@ static const char* ToString(SimFormat format) {
     if (format == SIM_SM) return "sm";
     if (format == SIM_SSC) return "ssc";
     if (format == SIM_OSU) return "osu";
+    if (format == SIM_DWI) return "dwi";
     return "none";
 }
 
@@ -134,7 +135,23 @@ static SimFormat ToSimFormat(const std::string& str) {
     if (str == "sm") return SIM_SM;
     if (str == "ssc") return SIM_SSC;
     if (str == "osu") return SIM_OSU;
+    if (str == "dwi") return SIM_DWI;
     return SIM_NONE;
+}
+
+// Returns the format written by one of the save dialog filters, SIM_NONE for
+// the catch-all filter and for an index outside the list.
+static SimFormat GetSaveFilterFormat(int index) {
+    if (index < 0 || index >= SAVE_FILTERS_COUNT) return SIM_NONE;
+    return ToSimFormat(saveFilters[index].pattern);
+}
+
+// Returns the save dialog filter that writes the given format, or -1.
+static int FindSaveFilter(SimFormat format) {
+    for (int i = 0; i < SAVE_FILTERS_COUNT; ++i) {
+        if (GetSaveFilterFormat(i) == format) return i;
+    }
+    return -1;
 }
 
 static std::string getSettingsDir() {
@@ -609,22 +626,7 @@ struct EditorImpl : public Editor, public InputHandler {
         if (save_path.empty() || showSaveAsDialog) {
             // Set the default filter index based on the save format.
             // SDL doesn't support this currently.
-            int filterIndex;
-            switch (saveFmt) {
-                default:
-                case SIM_SM:
-                    filterIndex = 0;
-                    break;
-                case SIM_SSC:
-                    filterIndex = 1;
-                    break;
-                case SIM_OSU:
-                    filterIndex = 2;
-                    break;
-                case SIM_DWI:
-                    filterIndex = 3;
-                    break;
-            };
+            int filterIndex = FindSaveFilter(saveFmt);
 
             // Show the save file dialog.
             save_path = gSystem->saveFileDlg("Save file", saveFilters,
@@ -636,33 +638,20 @@ struct EditorImpl : public Editor, public InputHandler {
 
             if (save_path.empty()) return false;
 
-            // Update the save format based on the selected filter index.
-            // SDL3 returns 0-based filter indices (getFilterIndex subtracts 1).
-            switch (filterIndex) {
-                case 0:
-                    saveFmt = SIM_SM;
-                    break;
-                case 1:
-                    saveFmt = SIM_SSC;
-                    break;
-                case 2:
-                    saveFmt = SIM_OSU;
-                    break;
-                case 3:
-                    saveFmt = SIM_DWI;
-                    break;
-                default:
-                    if (ext == ".ssc") {
-                        saveFmt = SIM_SSC;
-                    } else if (ext == ".osu") {
-                        saveFmt = SIM_OSU;
-                    } else if (ext == ".dwi") {
-                        saveFmt = SIM_DWI;
-                    } else {
-                        saveFmt = SIM_SM;
-                    }
-                    break;
-            };
+            // Update the save format, preferring the extension that was
+            // typed: SDL3 cannot preselect a filter, so the dialog always
+            // opens on the first one, and reading the filter first turned a
+            // typed "song.ssc" into song.sm. Fall back to the selected filter,
+            // which SDL3 reports as -1 when the backend does not say which one
+            // it was, and otherwise keep the format the simfile already has.
+            Str::toLower(ext);
+            SimFormat extFmt = ToSimFormat(ext.empty() ? ext : ext.substr(1));
+            SimFormat filterFmt = GetSaveFilterFormat(filterIndex);
+            if (extFmt != SIM_NONE) {
+                saveFmt = extFmt;
+            } else if (filterFmt != SIM_NONE) {
+                saveFmt = filterFmt;
+            }
 
             // Save the simfile, and keep using the format that was picked.
             if (!gSimfile->save(dir, file, saveFmt, true)) {
