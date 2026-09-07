@@ -88,8 +88,10 @@ static SDL_DialogFileFilter loadFilters[] = {
 };
 
 #define SAVE_FILTERS_COUNT 5
+// SDL3 cannot preselect a filter, so the dialog opens on the first one and
+// that is the format a new file gets by default.
 static SDL_DialogFileFilter saveFilters[] = {
-    {"Stepmania/ITG (*.sm)", "sm"}, {"Stepmania 5 (*.ssc)", "ssc"},
+    {"Stepmania 5 (*.ssc)", "ssc"}, {"Stepmania/ITG (*.sm)", "sm"},
     {"Osu!mania (*.osu)", "osu"},   {"Dance With Intensity (*.dwi)", "dwi"},
     {"All Files (*.*)", "*"},
 };
@@ -210,7 +212,7 @@ struct EditorImpl : public Editor, public InputHandler {
         myUseVerticalSync = true;
 
         myBackgroundStyle = BG_STYLE_STRETCH;
-        myDefaultSaveFormat = {SIM_SM};
+        myDefaultSaveFormat = {SIM_SSC};
 
         myFontPath = "assets/NotoSansJP-Medium.ttf";
         myFontSize = 13;
@@ -363,7 +365,7 @@ struct EditorImpl : public Editor, public InputHandler {
                     }
                 }
             }
-            if (saveFormats.empty()) saveFormats.push_back(SIM_SM);
+            if (saveFormats.empty()) saveFormats.push_back(SIM_SSC);
             myDefaultSaveFormat = saveFormats;
         }
 
